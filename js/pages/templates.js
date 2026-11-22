@@ -13,7 +13,7 @@
       (hasWork ? '<br><br><b>งานปัจจุบันยังไม่ได้บันทึก</b> — จะถูกบันทึกเก็บเป็นโปรเจกต์สำรองให้' : '');
     if (!(await confirmBox('ใช้แม่แบบ', msg, 'ใช้แม่แบบนี้'))) return;
     if (hasWork) ws.saveProject((ws.data.name || 'งานเดิม') + ' (สำรอง)');
-    const r = ws.applyTemplate(tpl);
+    const r = await ws.applyTemplate(tpl);
     S.pages.editor.resetOutput();
     location.hash = '#/editor';
     toast(r && !r.ok ? 'โหลดแล้ว แต่ init.sql มีข้อผิดพลาด' : `โหลดแม่แบบ "${tpl.title}" แล้ว`, r && !r.ok ? 'err' : 'ok');

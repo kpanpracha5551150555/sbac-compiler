@@ -183,9 +183,9 @@
     if (mode === 'selection' && !opts.code) return toast('ยังไม่ได้เลือกโค้ด', 'err');
     setState('run');
     els.runBtn.disabled = true;
-    setTimeout(() => {
+    setTimeout(async () => {
       try {
-        lastOut = mode === 'all' ? ws.runAll() : ws.runFile(f, opts);
+        lastOut = await (mode === 'all' ? ws.runAll() : ws.runFile(f, opts));
       } catch (e) {
         lastOut = { label: f.name, ok: false, ms: 0, sections: [{ result: { ok: false, items: [{ kind: 'error', message: String(e.message || e) }], ms: 0, statements: 0 } }] };
       }
@@ -249,20 +249,20 @@
     });
   }
   function renderDbOverview(body) {
-    let sch = [];
-    try { sch = engine.schema(ws.db); } catch (e) { /* ignore */ }
+    const sch = ws.schema();
     if (!sch.length) {
       body.append(h('div', { class: 'side-empty' }, 'ยังไม่มีตารางในฐานข้อมูล — รันไฟล์ที่มี CREATE TABLE (เช่น init.sql) หรือเลือก ',
         h('a', { href: '#/templates' }, 'แม่แบบ')));
       return;
     }
     sch.forEach((t) => {
-      let data = { columns: [], rows: [] };
-      try { data = engine.tableData(ws.db, t.name, { limit: 5 }); } catch (e) { /* ignore */ }
+      const slot = h('div', { class: 'muted small' }, 'กำลังโหลด…');
       body.append(h('div', { class: 'tbl-card' },
         h('h3', null, h('a', { href: '#/tables/' + encodeURIComponent(t.name) }, t.name),
           h('span', { class: 'meta' }, `${t.type === 'view' ? 'VIEW · ' : ''}${t.rowCount ?? '?'} แถว${t.rowCount > 5 ? ' · แสดง 5 แถวแรก' : ''}`)),
-        U.dataGrid(data.columns, data.rows)));
+        slot));
+      ws.tableData(t.name, 5).then((d) => slot.replaceWith(U.dataGrid(d.columns, d.rows, { numeric: d.numeric })))
+        .catch((e) => { slot.textContent = e.message; });
     });
   }
 
@@ -353,8 +353,7 @@
 
   function sideDb(body, head) {
     head.append(h('button', { class: 'icon-btn', title: 'รีเฟรช', onclick: renderSide }, icon('refresh')));
-    let sch = [];
-    try { sch = engine.schema(ws.db); } catch (e) { /* ignore */ }
+    const sch = ws.schema();
     if (!sch.length) {
       body.append(h('div', { class: 'side-empty' }, 'ยังไม่มีตาราง — รัน init.sql หรือเลือกแม่แบบ'));
     }
@@ -397,7 +396,26 @@
     const modeSel = h('select', { class: 'select', onchange: (e) => { store.setSettings({ runMode: e.target.value }); refreshMeta(); } },
       h('option', { value: 'persist', selected: st.runMode !== 'fresh' }, 'ต่อเนื่อง — ฐานข้อมูลคงอยู่ระหว่างการรัน'),
       h('option', { value: 'fresh', selected: st.runMode === 'fresh' }, 'เริ่มใหม่ — ล้าง DB + รัน init.sql ก่อนทุกครั้ง'));
+    const urlInput = h('input', { class: 'input', value: S.remote.url(), placeholder: S.remote.defaultUrl, style: { height: '34px' } });
+    const urlInfo = h('div', { class: 'muted small', style: { margin: '6px 4px', lineHeight: '1.6' } });
+    const testUrl = async () => {
+      store.setSettings({ serverUrl: urlInput.value.trim() || S.remote.defaultUrl });
+      urlInfo.textContent = 'กำลังทดสอบ…';
+      try {
+        const r = await S.remote.health();
+        urlInfo.innerHTML = '';
+        urlInfo.append(h('span', { style: { color: 'var(--ok)' } }, '✓ เชื่อมต่อได้'), h('br'), r.server.version, h('br'), `จำกัดเวลา ${r.limits.timeoutSec} วินาที · ${r.limits.maxRows} แถว · DB ${r.limits.maxDbMB} MB`);
+        if (ws.isRemote()) { await S.remote.refresh(); ws.emit('db'); }
+      } catch (e) { urlInfo.innerHTML = ''; urlInfo.append(h('span', { style: { color: 'var(--err)' } }, '✗ ' + e.message)); }
+      refreshMeta();
+    };
+    urlInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') testUrl(); });
     body.append(
+      h('div', { class: 'side-section' }, 'เซิร์ฟเวอร์ SQL Server จริง'),
+      h('div', { style: { display: 'grid', gap: '6px', margin: '4px' } }, urlInput,
+        h('button', { class: 'btn btn-xs', onclick: testUrl }, 'บันทึกและทดสอบการเชื่อมต่อ')), urlInfo,
+      h('p', { class: 'muted small', style: { margin: '0 6px 10px', lineHeight: '1.6' } }, 'ใช้เมื่อเลือก "SQL Server (เซิร์ฟเวอร์จริง)" ที่ปุ่มเลือกฐานข้อมูล — เปิดเซิร์ฟเวอร์ด้วย node server/server.js'),
+      h('div', { class: 'side-section' }, 'การรัน'),
       row('โหมดการรัน', modeSel),
       h('p', { class: 'muted small', style: { margin: '0 6px 8px', lineHeight: '1.6' } }, 'ทั้งสองโหมด ปุ่ม Run จะรันเฉพาะแท็บที่เปิดอยู่เสมอ'),
       row('ขนาดตัวอักษร', fontSel),
@@ -427,7 +445,7 @@
   }
   async function resetDbAsk() {
     if (await confirmBox('Reset ฐานข้อมูล', 'ลบตารางและข้อมูลทั้งหมดในฐานข้อมูลของ workspace นี้ (โค้ดในแท็บไม่หาย)<br>รันไฟล์ init.sql ใหม่ได้ภายหลัง', 'Reset', true)) {
-      ws.resetDb();
+      await ws.resetDb();
       lastOut = null; renderOut(); setState('ready');
     }
   }
@@ -438,9 +456,22 @@
     toast(store.settings().runMode === 'fresh' ? 'โหมดเริ่มใหม่: ล้าง DB และรัน init.sql ก่อนทุกครั้ง' : 'โหมดต่อเนื่อง: ฐานข้อมูลคงอยู่ระหว่างการรัน');
     if (side === 'settings') renderSide();
   }
-  function changeDialect(d) {
+  async function changeDialect(d) {
     ws.setDialect(d);
-    toast(`เปลี่ยนเป็น ${D.get(d).label} — ฐานข้อมูลเดิมยังอยู่`);
+    if (d === 'mssql') {
+      try {
+        const r = await S.remote.health();
+        await S.remote.refresh();
+        ws.emit('db');
+        toast(`เชื่อมต่อ ${r.server.version.replace(/\s*\(.*$/, '')} แล้ว — ใช้ฐานข้อมูลส่วนตัวของคุณบนเซิร์ฟเวอร์`, 'ok');
+      } catch (e) {
+        ws.emit('db');
+        modal({ title: 'ยังเชื่อมต่อ SQL Server จริงไม่ได้', body: h('div', null, h('p', null, e.message), h('p', null, e.hint || ''),
+          h('p', { class: 'muted small' }, 'ที่อยู่เซิร์ฟเวอร์ตอนนี้: ', h('code', null, S.remote.url()))),
+        actions: [{ label: 'ใช้แบบจำลองในเบราว์เซอร์', onClick: () => changeDialect('tsql') }, { label: 'ตั้งค่าเซิร์ฟเวอร์', primary: true, onClick: () => toggleSide('settings', true) }] });
+      }
+    } else toast(`เปลี่ยนเป็น ${D.get(d).label}`);
+    refreshMeta();
   }
   async function uploadFile() {
     const f = await U.pickFile('.sql,.txt');
@@ -460,7 +491,7 @@
   async function openProject(p) {
     if (p.id === ws.data.projectId) return;
     if (!(await confirmBox('เปิดโปรเจกต์', `เปิด <b>${U.esc(p.name)}</b>? ไฟล์ในแท็บตอนนี้จะถูกแทนที่ ${ws.data.projectId ? '' : '<br><b>งานปัจจุบันยังไม่ได้บันทึก</b>'}`, 'เปิด'))) return;
-    ws.openProject(p);
+    await ws.openProject(p);
     lastOut = null; renderOut();
   }
   async function share() {
@@ -484,7 +515,7 @@
     if (!ok) return;
     if (!ws.data.projectId) ws.saveProject((ws.data.name || 'งานเดิม') + ' (สำรอง)');
     else ws.saveProject(ws.data.name);
-    ws.openProject({ id: null, name: data.name || 'โค้ดที่แชร์', dialect: data.dialect, files: data.files });
+    await ws.openProject({ id: null, name: data.name || 'โค้ดที่แชร์', dialect: data.dialect, files: data.files });
     lastOut = null; renderOut();
     toast('เปิดโค้ดที่แชร์แล้ว', 'ok');
   }
@@ -521,15 +552,20 @@
   /* ---------------- sync with workspace ---------------- */
   function refreshMeta() {
     els.dialect.value = ws.data.dialect;
-    els.stDialect.textContent = D.get(ws.data.dialect).label;
-    let n = 0;
-    try { n = engine.schema(ws.db).length; } catch (e) { /* ignore */ }
-    els.stDb.textContent = `DB: ${n} ตาราง`;
+    const remote = ws.isRemote();
+    els.stDialect.textContent = remote
+      ? (S.remote.status === 'ok' && S.remote.info ? '● ' + S.remote.info.version.replace(/\s*\(.*$/, '').replace(/^Microsoft /, '') : S.remote.status === 'down' ? '○ เซิร์ฟเวอร์ไม่ตอบ' : 'SQL Server (เซิร์ฟเวอร์จริง)')
+      : D.get(ws.data.dialect).label + (ws.data.dialect === 'tsql' ? ' · จำลองในเบราว์เซอร์' : '');
+    els.stDialect.style.color = remote ? (S.remote.status === 'down' ? 'var(--err)' : 'var(--ok)') : '';
+    const sch = ws.schema();
+    els.stDb.textContent = `DB: ${sch.length} ตาราง`;
     const fresh = store.settings().runMode === 'fresh';
     els.modePill.textContent = fresh ? '↻ เริ่มใหม่ทุกครั้ง' : '● DB ต่อเนื่อง';
     els.modePill.title = fresh ? 'ล้างฐานข้อมูลและรัน init.sql ก่อนทุกครั้ง (คลิกเพื่อสลับ)' : 'ฐานข้อมูลคงอยู่ระหว่างการรัน (คลิกเพื่อสลับ)';
     els.stTheme.textContent = S.app ? (S.app.isDark() ? 'Dark' : 'Light') + ' ⇄' : '';
-    cm.setOption('hintOptions', { tables: engine.hintTables(ws.db), completeSingle: false });
+    const tables = {};
+    sch.forEach((t) => { tables[t.name] = t.columns.map((c) => c.name); });
+    cm.setOption('hintOptions', { tables, completeSingle: false });
   }
   function onWs(type) {
     if (type === 'files') { rebuildDocs(); }

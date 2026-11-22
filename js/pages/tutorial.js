@@ -32,11 +32,11 @@
     const ds = S.datasets[datasetId];
     if (ds) {
       let names = [];
-      try { names = engine.schema(S.ws.db).map((t) => t.name.toLowerCase()); } catch (e) { /* ignore */ }
+      names = S.ws.schema().map((t) => t.name.toLowerCase());
       const missing = ds.tables.filter((t) => !names.includes(t.toLowerCase()));
       if (missing.length === ds.tables.length) {
         const ok = await confirmBox('เปิดใน Compiler', `ฐานข้อมูลใน Compiler ยังไม่มีตาราง <b>${ds.tables.join(', ')}</b><br>เพิ่มข้อมูลตัวอย่าง "${ds.name}" ลงในฐานข้อมูลด้วยไหม?`, 'เพิ่มข้อมูลและเปิด');
-        if (ok) { const r = S.ws.exec(ds.sql); S.ws.persistDb(); S.ws.emit('db'); if (!r.ok) toast('เพิ่มข้อมูลไม่สำเร็จ: ' + r.items.find((i) => i.kind === 'error').message, 'err'); }
+        if (ok) { const r = await S.ws.exec(ds.sql); if (!S.ws.isRemote()) S.ws.persistDb(); S.ws.emit('db'); if (!r.ok) toast('เพิ่มข้อมูลไม่สำเร็จ: ' + r.items.find((i) => i.kind === 'error').message, 'err'); }
       }
     }
     location.hash = '#/editor';

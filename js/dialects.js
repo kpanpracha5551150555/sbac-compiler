@@ -8,7 +8,8 @@
   'use strict';
 
   const DIALECTS = [
-    { id: 'tsql', label: 'Microsoft SQL Server', short: 'SQL Server', cmMode: 'text/x-mssql' },
+    { id: 'tsql', label: 'Microsoft SQL Server', short: 'SQL Server (จำลอง)', cmMode: 'text/x-mssql' },
+    { id: 'mssql', label: 'SQL Server (เซิร์ฟเวอร์จริง)', short: 'SQL Server จริง', cmMode: 'text/x-mssql', remote: true },
     { id: 'mysql', label: 'MySQL', short: 'MySQL', cmMode: 'text/x-mysql' },
     { id: 'sqlite', label: 'SQLite', short: 'SQLite', cmMode: 'text/x-sqlite' },
   ];

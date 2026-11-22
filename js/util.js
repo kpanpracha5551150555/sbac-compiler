@@ -222,6 +222,7 @@ window.SBAC = window.SBAC || {};
         const f = fmtValue(row[c]);
         const td = document.createElement('td');
         if (f.cls) td.className = f.cls;
+        else if (opts.numeric && opts.numeric[c]) td.className = 'num';
         td.textContent = f.text;
         if (f.text.length > 40) td.title = f.text;
         tr.appendChild(td);
@@ -249,7 +250,7 @@ window.SBAC = window.SBAC || {};
         } }, 'คัดลอก');
         frag.appendChild(h('div', { class: 'result' },
           h('div', { class: 'result-head' }, h('span', null, label), opts.noCopy ? null : copyBtn),
-          dataGrid(it.columns, it.rows, { rowNumbers: opts.rowNumbers !== false })));
+          dataGrid(it.columns, it.rows, { rowNumbers: opts.rowNumbers !== false, numeric: it.numeric })));
       } else if (it.kind === 'msg') {
         frag.appendChild(h('div', { class: 'msg ' + (it.tone || '') }, it.text));
       } else if (it.kind === 'error') {

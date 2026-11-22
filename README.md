@@ -31,6 +31,35 @@ python -m http.server 5173
 แล้วเปิด http://localhost:5173 (ครั้งแรกต้องต่ออินเทอร์เน็ตเพื่อโหลด CodeMirror และ sql.js จาก cdnjs)
 หรือเปิดผ่าน GitHub Pages ได้ทันที
 
+## เฟส 2: รันบน SQL Server จริง
+
+เลือก **"SQL Server (เซิร์ฟเวอร์จริง)"** ที่ปุ่มเลือกฐานข้อมูล แล้วโค้ดจะถูกส่งไปรันบน Microsoft SQL Server ของจริง
+ใช้ได้ทุกคำสั่ง T-SQL รวมทั้ง `IF`/`WHILE`, stored procedure, function และ trigger
+
+**สิ่งที่ต้องมี:** Windows ที่ติดตั้ง SQL Server (Developer/Express ก็ได้) + ODBC Driver 17/18 for SQL Server + Node.js 18 ขึ้นไป
+
+```bash
+cd server
+npm install
+npm start
+```
+
+เปิด http://localhost:3000 (เซิร์ฟเวอร์เปิดหน้าเว็บให้ด้วย) หรือใช้หน้าเว็บบน GitHub Pages บนเครื่องเดียวกันก็ได้
+เซิร์ฟเวอร์ล็อกอิน SQL Server ด้วยบัญชี Windows ของคนที่รัน ไม่ต้องตั้งรหัสผ่าน
+
+**ความปลอดภัย (sandbox):**
+- เบราว์เซอร์แต่ละเครื่องได้ฐานข้อมูลของตัวเอง `sbac_<session>` จำกัดขนาด 64 MB
+- โค้ดของผู้ใช้รันในสิทธิ์ผู้ใช้ฐานข้อมูลแบบไม่มีล็อกอิน (`EXECUTE AS USER … WITH NO REVERT`) จึงเข้าถึงได้เฉพาะฐานข้อมูลของตัวเอง
+  แตะฐานข้อมูลอื่นหรือคำสั่งระดับเซิร์ฟเวอร์ไม่ได้
+- จำกัดเวลา 10 วินาทีต่อการรัน, 2,000 แถวต่อผลลัพธ์, 60 ครั้งต่อนาทีต่อ IP และลบฐานข้อมูลที่ไม่ได้ใช้เกิน 2 ชั่วโมงให้อัตโนมัติ
+
+| ตัวแปรสภาพแวดล้อม | ค่าเริ่มต้น | ความหมาย |
+|---|---|---|
+| `PORT` / `HOST` | `3000` / `127.0.0.1` | พอร์ตและที่อยู่ที่เปิดรับ |
+| `SBAC_SQL_SERVER` | `(local)` | instance ของ SQL Server เช่น `.\SQLEXPRESS` |
+| `SBAC_TIMEOUT` | `10` | วินาทีสูงสุดต่อการรัน |
+| `SBAC_ALLOWED_ORIGINS` | GitHub Pages ของโปรเจกต์ | เว็บที่อนุญาตให้เรียก API (คั่นด้วย `,`) |
+
 ## โครงสร้างโปรเจกต์
 
 ```
@@ -40,6 +69,8 @@ js/util.js            helper UI (modal, toast, ตารางผลลัพธ
 js/store.js           บันทึกลง localStorage
 js/dialects.js        แปลง T-SQL / MySQL → SQLite
 js/engine.js          ตัวรัน SQL, schema, ตัวตรวจคำตอบ
+js/remote.js          เชื่อมต่อเซิร์ฟเวอร์ SQL Server จริง (เฟส 2)
+server/server.js      API server: Node.js + msnodesqlv8 → SQL Server (เฟส 2)
 js/workspace.js       workspace ปัจจุบัน (ไฟล์ + ฐานข้อมูล)
 js/data/*.js          ชุดข้อมูล แม่แบบ บทเรียน แบบฝึกหัด
 js/pages/*.js         หน้า Compiler / แม่แบบ / บทเรียน / ตาราง / แบบฝึกหัด

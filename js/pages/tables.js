@@ -5,9 +5,11 @@
   const { h, icon, toast, modal, confirmBox } = U;
   const engine = S.engine;
   let root, current = null, sub = 'data', state = { q: '', page: 0, sortCol: null, sortDir: 1 };
+  let dataCache = null; // { name, data } — rows of the open table (remote mode fetches once)
   const PAGE = 50;
 
-  function schema() { try { return engine.schema(S.ws.db); } catch (e) { return []; } }
+  function schema() { return S.ws.schema(); }
+  const sqlName = (n) => n.split('.').map((p) => (S.ws.isRemote() ? '[' + p.replace(/]/g, ']]') + ']' : engine.qi(p))).join('.');
 
   function render() {
     root.innerHTML = '';
@@ -49,12 +51,13 @@
       h('div', null, h('h1', null, 'ตาราง'), h('p', null, `${tables.length} ตาราง · ${totalRows.toLocaleString()} แถว — ข้อมูลเดียวกับที่ใช้ใน Compiler (${S.ws.data.name || 'workspace'})`)),
       h('a', { class: 'btn', href: '#/editor' }, icon('code'), 'กลับไป Compiler')));
     tables.forEach((t) => {
-      let d = { columns: [], rows: [] };
-      try { d = engine.tableData(S.ws.db, t.name, { limit: 10 }); } catch (e) { /* ignore */ }
+      const slot = h('div', { class: 'muted small' }, 'กำลังโหลด…');
       c.append(h('div', { class: 'tbl-card' },
         h('h3', null, h('a', { href: '#/tables/' + encodeURIComponent(t.name), style: { color: 'var(--text)' } }, t.name),
           h('span', { class: 'meta' }, `${t.type === 'view' ? 'VIEW · ' : ''}${t.columns.length} คอลัมน์ · ${t.rowCount ?? '?'} แถว${t.rowCount > 10 ? ' · แสดง 10 แถวแรก' : ''}`)),
-        U.dataGrid(d.columns, d.rows, { big: true })));
+        slot));
+      S.ws.tableData(t.name, 10).then((d) => slot.replaceWith(U.dataGrid(d.columns, d.rows, { big: true, numeric: d.numeric })))
+        .catch((e) => { slot.textContent = e.message; });
     });
   }
 
@@ -75,8 +78,13 @@
   }
 
   function dataView(c, t) {
-    let d;
-    try { d = engine.tableData(S.ws.db, t.name, { limit: 10000 }); } catch (e) { c.append(U.errorBox({ message: e.message })); return; }
+    if (!dataCache || dataCache.name !== t.name) {
+      c.append(h('div', { class: 'muted' }, 'กำลังโหลดข้อมูล…'));
+      S.ws.tableData(t.name, 10000).then((d) => { dataCache = { name: t.name, data: d }; render(); })
+        .catch((e) => { c.lastChild.replaceWith(U.errorBox({ message: e.message })); });
+      return;
+    }
+    const d = dataCache.data;
     let rows = d.rows;
     const q = state.q.trim().toLowerCase();
     if (q) rows = rows.filter((r) => r.some((v) => v != null && String(v).toLowerCase().includes(q)));
@@ -96,7 +104,7 @@
     c.append(h('div', { class: 'toolbar' }, search, h('span', { class: 'grow' }),
       h('span', { class: 'muted small' }, q ? `พบ ${rows.length.toLocaleString()} แถว` : `${rows.length.toLocaleString()} แถว`, ' · คลิกหัวคอลัมน์เพื่อเรียง')));
     c.append(U.dataGrid(d.columns, rows.slice(state.page * PAGE, (state.page + 1) * PAGE), {
-      rowNumbers: true, rowOffset: state.page * PAGE, sortable: true, sortCol: state.sortCol, sortDir: state.sortDir,
+      rowNumbers: true, rowOffset: state.page * PAGE, sortable: true, numeric: d.numeric, sortCol: state.sortCol, sortDir: state.sortDir,
       onSort: (i) => { if (state.sortCol === i) state.sortDir = -state.sortDir; else { state.sortCol = i; state.sortDir = 1; } render(); },
     }));
     if (pages > 1) {
@@ -129,22 +137,24 @@
     location.hash = '#/editor';
     setTimeout(() => S.pages.editor.newTab('query_' + t.name.toLowerCase() + '.sql', `SELECT TOP 100 *\nFROM ${/^\w+$/.test(t.name) ? t.name : '[' + t.name + ']'};\n`, true), 60);
   }
-  function exportCsv(t) {
-    const d = engine.tableData(S.ws.db, t.name);
-    U.downloadText(t.name + '.csv', U.toCSV(d.columns, d.rows), 'text/csv');
+  async function exportCsv(t) {
+    try {
+      const d = await S.ws.tableData(t.name, 10000);
+      U.downloadText(t.name + '.csv', U.toCSV(d.columns, d.rows), 'text/csv');
+    } catch (e) { toast(e.message, 'err'); }
   }
   async function dropTable(t) {
     if (!(await confirmBox(t.type === 'view' ? 'ลบ View' : 'ลบตาราง', `ลบ <b>${U.esc(t.name)}</b> และข้อมูลทั้งหมดในนั้น? (รันโค้ดสร้างตารางใหม่ได้ภายหลัง)`, 'ลบ', true))) return;
-    try {
-      S.ws.db.run(`DROP ${t.type === 'view' ? 'VIEW' : 'TABLE'} ${engine.qi(t.name)}`);
-      S.ws.persistDb(); S.ws.emit('db');
-      current = null; location.hash = '#/tables';
-      toast('ลบแล้ว', 'ok');
-    } catch (e) { toast(e.message, 'err'); }
+    const r = await S.ws.exec(`DROP ${t.type === 'view' ? 'VIEW' : 'TABLE'} ${sqlName(t.name)};`);
+    if (!r.ok) { const err = r.items.find((i) => i.kind === 'error'); toast(err ? err.message : 'ลบไม่สำเร็จ', 'err'); return; }
+    if (!S.ws.isRemote()) S.ws.persistDb();
+    S.ws.emit('db');
+    current = null; location.hash = '#/tables';
+    toast('ลบแล้ว', 'ok');
   }
   async function resetAll() {
     if (await confirmBox('Reset ฐานข้อมูล', 'ลบตารางทั้งหมดในฐานข้อมูลของ workspace (โค้ดใน Compiler ไม่หาย)', 'Reset', true)) {
-      S.ws.resetDb(); current = null; location.hash = '#/tables'; render();
+      await S.ws.resetDb(); current = null; location.hash = '#/tables'; render();
     }
   }
 
@@ -168,9 +178,24 @@
       title: 'นำเข้า CSV เป็นตาราง', wide: true,
       body: h('div', null, h('label', { class: 'field' }, 'ชื่อตาราง', nameInput),
         h('p', null, `${data.length.toLocaleString()} แถว · ${header.length} คอลัมน์ · ชนิดข้อมูลเดาจากค่าในไฟล์`), preview),
-      actions: [{ label: 'ยกเลิก' }, { label: 'สร้างตาราง', primary: true, onClick: () => {
+      actions: [{ label: 'ยกเลิก' }, { label: 'สร้างตาราง', primary: true, onClick: async () => {
         const name = nameInput.value.trim();
         if (!name) { toast('ใส่ชื่อตาราง', 'err'); return false; }
+        if (S.ws.isRemote()) {
+          // real SQL Server: send a CREATE + INSERT script (max 1000 rows per VALUES list)
+          const q = (v, i) => (v === '' ? 'NULL' : /^(INT|DECIMAL)/.test(types[i]) ? v : "N'" + String(v).replace(/'/g, "''") + "'");
+          const typeSql = (t) => (t === 'NVARCHAR(255)' ? 'NVARCHAR(4000)' : t);
+          let script = `CREATE TABLE ${sqlName(name)} (${header.map((c, i) => `[${c.replace(/]/g, ']]')}] ${typeSql(types[i])}`).join(', ')});\n`;
+          for (let k = 0; k < data.length; k += 900) {
+            script += `INSERT INTO ${sqlName(name)} VALUES\n` + data.slice(k, k + 900).map((r) => '(' + r.map(q).join(', ') + ')').join(',\n') + ';\n';
+          }
+          const r = await S.ws.exec(script);
+          if (!r.ok) { const err = r.items.find((i) => i.kind === 'error'); toast(err ? err.message : 'นำเข้าไม่สำเร็จ', 'err'); return false; }
+          S.ws.emit('db');
+          toast(`สร้างตาราง ${name} (${data.length} แถว)`, 'ok');
+          location.hash = '#/tables/' + encodeURIComponent(name);
+          return true;
+        }
         const db = S.ws.db;
         try {
           const cols = header.map((c, i) => `${engine.qi(c)} ${types[i]}${/CHAR/.test(types[i]) ? ' COLLATE NOCASE' : ''}`).join(', ');
@@ -200,10 +225,11 @@
 
   S.pages = S.pages || {};
   S.pages.tables = {
-    init(el) { root = el; S.ws.on((type) => { if (type === 'db' && !root.hidden) render(); }); },
+    init(el) { root = el; S.ws.on((type) => { if (type === 'db') { dataCache = null; if (!root.hidden) render(); } }); },
     show(route) {
       const name = route.params[0] ? decodeURIComponent(route.params[0]) : null;
       if (name !== current) { state = { q: '', page: 0, sortCol: null, sortDir: 1 }; sub = 'data'; }
+      dataCache = null;
       current = name;
       render();
     },

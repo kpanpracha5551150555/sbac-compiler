@@ -26,12 +26,13 @@
       const saved = store.loadWorkspace();
       if (saved && Array.isArray(saved.files) && saved.files.length) {
         this.data = saved;
+        if (this.data.dialect === 'mssql') S.remote.refresh().then(() => this.emit('db')).catch(() => {});
         if (!this.data.files.some((f) => f.id === this.data.activeFileId)) this.data.activeFileId = this.data.files[0].id;
         let bytes = store.loadDb();
         try { this.db = engine.createDb(bytes); } catch (e) { this.db = engine.createDb(); }
       } else {
         this.db = engine.createDb();
-        this.applyTemplate(S.templates.find((t) => t.id === 'shop'), { silent: true });
+        await this.applyTemplate(S.templates.find((t) => t.id === 'shop'), { silent: true });
       }
     },
 
@@ -82,39 +83,58 @@
         if (!store.saveDb(bytes)) U.toast('ฐานข้อมูลใหญ่เกินกว่าจะบันทึกในเบราว์เซอร์ (ยังใช้งานได้จนกว่าจะปิดหน้า)', 'err');
       } catch (e) { console.warn(e); }
     },
-    resetDb(silent) {
+    isRemote() { return !!(this.data && this.data.dialect === 'mssql'); },
+    /** Tables/columns of the current database (sync: remote mode uses the cached snapshot) */
+    schema() {
+      if (this.isRemote()) return S.remote.cache || [];
+      try { return engine.schema(this.db); } catch (e) { return []; }
+    },
+    /** Rows of a table → Promise<{columns, rows, numeric?}> */
+    async tableData(name, limit) {
+      if (this.isRemote()) return S.remote.table(name, limit);
+      return engine.tableData(this.db, name, limit ? { limit } : null);
+    },
+    async resetDb(silent) {
       try { this.db.close(); } catch (e) { /* ignore */ }
       this.db = engine.createDb();
       store.saveDb(null);
+      if (this.isRemote()) {
+        try { await S.remote.reset(); } catch (e) { if (!silent) U.toast(e.message, 'err'); this.emit('db'); return false; }
+      }
       this.emit('db');
       if (!silent) U.toast('รีเซ็ตฐานข้อมูลแล้ว', 'ok');
+      return true;
     },
 
-    /* ---------- running ---------- */
-    exec(code, opts) {
-      const r = engine.execute(this.db, code, this.data.dialect, opts);
-      return r;
+    /* ---------- running (always async: the remote server is used for 'mssql') ---------- */
+    async exec(code, opts) {
+      if (this.isRemote()) {
+        const r = await S.remote.run(code);
+        if (opts && opts.lineOffset) r.items.forEach((it) => { if (it.line) it.line += opts.lineOffset; });
+        return r;
+      }
+      return engine.execute(this.db, code, this.data.dialect, opts);
     },
     /**
      * Run one file (the ACTIVE tab by default). opts: {code, lineOffset, label}
      * In "fresh" mode the database is rebuilt and init.sql runs first.
      */
-    runFile(file, opts) {
+    async runFile(file, opts) {
       opts = opts || {};
       const settings = store.settings();
       const out = { file: file.name, label: opts.label || file.name, sections: [] };
       if (settings.runMode === 'fresh') {
-        this.resetDb(true);
+        await this.resetDb(true);
         const init = this.initFile();
         if (init && init.id !== file.id) {
-          const r0 = this.exec(init.content);
+          const r0 = await this.exec(init.content);
           out.sections.push({ title: `${init.name} (รันให้ก่อนอัตโนมัติ — โหมดเริ่มใหม่ทุกครั้ง)`, result: r0, collapsed: r0.ok });
         }
       }
       // Running the whole init.sql again = start from a clean database (avoids "table already exists")
       const autoReset = settings.runMode !== 'fresh' && isInit(file) && opts.code == null;
-      if (autoReset) this.resetDb(true);
-      const r = this.exec(opts.code != null ? opts.code : file.content, { lineOffset: opts.lineOffset || 0 });
+      if (autoReset) await this.resetDb(true);
+      const r = await this.exec(opts.code != null ? opts.code : file.content, { lineOffset: opts.lineOffset || 0 });
       if (autoReset) r.items.unshift({ kind: 'msg', text: `↻ รีเซ็ตฐานข้อมูลก่อนรัน ${file.name} อัตโนมัติ`, tone: 'muted' });
       out.sections.push({ title: null, result: r });
       out.result = r;
@@ -124,13 +144,13 @@
       return out;
     },
     /** Run every tab from left to right (init.sql first if it exists). */
-    runAll() {
+    async runAll() {
       const settings = store.settings();
-      if (settings.runMode === 'fresh') this.resetDb(true);
+      if (settings.runMode === 'fresh') await this.resetDb(true);
       const ordered = [...this.data.files].sort((a, b) => (isInit(b) ? 1 : 0) - (isInit(a) ? 1 : 0));
       const out = { file: 'ทุกแท็บ', label: 'ทุกแท็บ', sections: [] };
       for (const f of ordered) {
-        const r = this.exec(f.content);
+        const r = await this.exec(f.content);
         out.sections.push({ title: f.name, result: r, fileId: f.id });
         if (!r.ok) break;
       }
@@ -141,25 +161,25 @@
       return out;
     },
     afterRun(out, code) {
-      this.persistDb();
+      if (!this.isRemote()) this.persistDb();
       store.addHistory({ t: Date.now(), file: out.label, dialect: this.data.dialect, ok: out.ok, ms: Math.round(out.ms), code: String(code).slice(0, 4000) });
       this.emit('db');
       this.emit('history');
     },
 
     /* ---------- load / templates / projects ---------- */
-    load(data, opts) {
+    async load(data, opts) {
       opts = opts || {};
       this.data = data;
       this.save();
-      if (opts.resetDb !== false) this.resetDb(true);
+      if (opts.resetDb !== false) await this.resetDb(true);
       this.emit('files');
       this.emit('dialect');
       if (opts.runInit !== false) {
         const init = this.initFile();
         if (init) {
-          const r = this.exec(init.content);
-          this.persistDb();
+          const r = await this.exec(init.content);
+          if (!this.isRemote()) this.persistDb();
           this.emit('db');
           if (!r.ok && !opts.silent) U.toast('init.sql มีข้อผิดพลาด — ดูที่แท็บ init.sql', 'err');
           return r;
@@ -170,6 +190,10 @@
     },
     applyTemplate(tpl, opts) {
       const data = fromTemplate(tpl);
+      // keep "real SQL Server" mode when the template is plain SQL / T-SQL
+      const cur = this.data && this.data.dialect;
+      if (cur === 'mssql' && (!tpl.dialect || tpl.dialect === 'tsql')) data.dialect = 'mssql';
+      else if (!tpl.dialect && cur) data.dialect = cur;
       const q = data.files.find((f) => !isInit(f));
       if (q) data.activeFileId = q.id;
       return this.load(data, opts);

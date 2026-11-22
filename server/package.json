@@ -1,0 +1,16 @@
+{
+  "name": "sbac-compiler-server",
+  "version": "2.0.0",
+  "description": "SBAC Compiler Phase 2 — runs code on a real Microsoft SQL Server (sandboxed per session)",
+  "main": "server.js",
+  "private": true,
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "msnodesqlv8": "^6.2.2"
+  }
+}
