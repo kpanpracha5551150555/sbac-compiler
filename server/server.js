@@ -15,7 +15,7 @@ const path = require('path');
 const sql = require('msnodesqlv8');
 
 const CFG = {
-  port: +(process.env.PORT || 3000),
+  port: +(process.env.PORT || 5199),
   host: process.env.HOST || '127.0.0.1',
   server: process.env.SBAC_SQL_SERVER || '(local)',
   driver: process.env.SBAC_ODBC_DRIVER || '',

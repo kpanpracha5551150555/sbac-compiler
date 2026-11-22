@@ -2,7 +2,7 @@
 (function (S) {
   'use strict';
   const store = S.store;
-  const DEFAULT_URL = 'http://localhost:3000';
+  const DEFAULT_URL = 'http://127.0.0.1:5199';
 
   function hintForMssql(msg) {
     let m;
@@ -35,7 +35,7 @@
     info: null,
     status: 'unknown', // unknown | ok | down
 
-    url() { return String(store.settings().serverUrl || DEFAULT_URL).trim().replace(/\/+$/, ''); },
+    url() { return String(store.settings().serverUrl || (location.port === '5199' ? location.origin : DEFAULT_URL)).trim().replace(/\/+$/, ''); },
     defaultUrl: DEFAULT_URL,
     session() {
       let s = store.get('remoteSession', null);
