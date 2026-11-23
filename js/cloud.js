@@ -12,6 +12,8 @@
     [/User already registered|already been registered/i, 'อีเมลนี้สมัครไว้แล้ว — ลองเข้าสู่ระบบ หรือกด "ลืมรหัสผ่าน"'],
     [/Password should be at least (\d+)/i, (m) => `รหัสผ่านต้องยาวอย่างน้อย ${m[1]} ตัวอักษร`],
     [/Unable to validate email address|invalid format|Email address .* is invalid/i, 'รูปแบบอีเมลไม่ถูกต้อง'],
+    [/only request this after (\d+) seconds?/i, (m) => `เพิ่งขอไปเมื่อครู่ — ขอได้อีกครั้งในอีก ${m[1]} วินาที`],
+    [/email rate limit|over_email_send_rate_limit/i, 'ระบบส่งอีเมลครบโควตาของชั่วโมงนี้แล้ว (บริการอีเมลฟรีของ Supabase ส่งได้ไม่กี่ฉบับต่อชั่วโมงทั้งเว็บ) — รอประมาณ 1 ชั่วโมงแล้วลองใหม่ หรือดูอีเมลที่ส่งไปก่อนหน้า (รวมถึงโฟลเดอร์ Spam)'],
     [/rate limit|too many requests|security purposes/i, 'ทำรายการถี่เกินไป รอสักครู่แล้วลองใหม่'],
     [/New password should be different/i, 'รหัสผ่านใหม่ต้องไม่ซ้ำกับรหัสเดิม'],
     [/project limit reached/i, 'บันทึกได้สูงสุด 200 โปรเจกต์ — ลบโปรเจกต์ที่ไม่ใช้ก่อน'],
