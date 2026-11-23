@@ -60,6 +60,29 @@ npm start
 | `SBAC_TIMEOUT` | `10` | วินาทีสูงสุดต่อการรัน |
 | `SBAC_ALLOWED_ORIGINS` | GitHub Pages ของโปรเจกต์ | เว็บที่อนุญาตให้เรียก API (คั่นด้วย `,`) |
 
+## เฟส 3: บัญชีผู้ใช้และเก็บงานบนคลาวด์ (Supabase)
+
+เมื่อตั้งค่าแล้ว มุมขวาบนจะมีปุ่ม **Login** — สมัครด้วยอีเมลและรหัสผ่าน แล้ว
+- กด **Save** (Ctrl + S) เพื่อเก็บงานบนคลาวด์ หลังจากนั้นทุกการแก้ไขบันทึกอัตโนมัติ (ดูสถานะ ☁ ที่แถบล่าง)
+- หน้า **งานของฉัน** แสดงงานบนคลาวด์ เปิด/เปลี่ยนชื่อ/ลบได้ และอัปโหลดงานที่เคยเก็บไว้ในเครื่องขึ้นคลาวด์
+- ความคืบหน้าบทเรียนและแบบฝึกหัดซิงก์ข้ามเครื่องอัตโนมัติ
+- ลืมรหัสผ่าน → ส่งลิงก์ตั้งรหัสใหม่ทางอีเมล
+
+ถ้ายังไม่ตั้งค่า เว็บทำงานแบบเดิม (เก็บงานในเบราว์เซอร์) และจะไม่มีปุ่ม Login
+
+**ขั้นตอนตั้งค่า (ทำครั้งเดียว)**
+1. สมัคร [supabase.com](https://supabase.com) → **New project** (Region: Southeast Asia (Singapore))
+2. **SQL Editor** → New query → วางเนื้อหาไฟล์ [`supabase/schema.sql`](supabase/schema.sql) → **Run**
+   (สร้างตาราง `projects`, `progress` และ Row Level Security ให้แต่ละคนเห็นเฉพาะข้อมูลตัวเอง)
+3. **Authentication → URL Configuration**
+   - Site URL: `https://kpanpracha5551150555.github.io/sbac-compiler/`
+   - Redirect URLs: เพิ่ม `http://127.0.0.1:5199/**` และ `http://127.0.0.1:5173/**` (ไว้ทดสอบในเครื่อง)
+4. **Project Settings → API** คัดลอก **Project URL** และ **anon public key** ใส่ใน [`js/config.js`](js/config.js)
+   (anon key เปิดเผยได้ตามการออกแบบของ Supabase — ห้ามใช้ `service_role` key)
+
+> อีเมลยืนยันของ Supabase แบบฟรีส่งได้ไม่กี่ฉบับต่อชั่วโมง ถ้าจะให้นักเรียนทั้งห้องสมัครพร้อมกัน
+> ให้ตั้ง SMTP ของตัวเอง (Authentication → Emails → SMTP) หรือปิด "Confirm email" (Authentication → Providers → Email)
+
 ## โครงสร้างโปรเจกต์
 
 ```
@@ -70,6 +93,11 @@ js/store.js           บันทึกลง localStorage
 js/dialects.js        แปลง T-SQL / MySQL → SQLite
 js/engine.js          ตัวรัน SQL, schema, ตัวตรวจคำตอบ
 js/remote.js          เชื่อมต่อเซิร์ฟเวอร์ SQL Server จริง (เฟส 2)
+js/config.js          ค่า Supabase (เฟส 3)
+js/cloud.js           ล็อกอิน + เก็บโปรเจกต์/ความคืบหน้าบนคลาวด์ (เฟส 3)
+js/account.js         ปุ่มบัญชี หน้าต่างล็อกอิน/สมัคร/ลืมรหัสผ่าน (เฟส 3)
+js/pages/projects.js  หน้า "งานของฉัน" (เฟส 3)
+supabase/schema.sql   ตารางและ Row Level Security บน Supabase (เฟส 3)
 server/server.js      API server: Node.js + msnodesqlv8 → SQL Server (เฟส 2)
 js/workspace.js       workspace ปัจจุบัน (ไฟล์ + ฐานข้อมูล)
 js/data/*.js          ชุดข้อมูล แม่แบบ บทเรียน แบบฝึกหัด

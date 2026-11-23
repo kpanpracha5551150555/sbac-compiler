@@ -10,7 +10,10 @@
     } catch (e) { return def; }
   }
   function set(key, val) {
-    try { localStorage.setItem(P + key, JSON.stringify(val)); return true; } catch (e) { return false; }
+    let ok = true;
+    try { localStorage.setItem(P + key, JSON.stringify(val)); } catch (e) { ok = false; }
+    if (store.onSet) { try { store.onSet(key, val); } catch (e) { /* ignore */ } }
+    return ok;
   }
   function remove(key) { try { localStorage.removeItem(P + key); } catch (e) { /* ignore */ } }
 

@@ -2,8 +2,8 @@
 (function (S) {
   'use strict';
   const U = S.util;
-  const PAGES = ['editor', 'templates', 'tutorial', 'tables', 'exercises'];
-  const TITLES = { editor: 'Compiler', templates: 'แม่แบบ', tutorial: 'บทเรียน', tables: 'ตาราง', exercises: 'แบบฝึกหัด' };
+  const PAGES = ['editor', 'templates', 'tutorial', 'tables', 'exercises', 'projects'];
+  const TITLES = { editor: 'Compiler', templates: 'แม่แบบ', tutorial: 'บทเรียน', tables: 'ตาราง', exercises: 'แบบฝึกหัด', projects: 'งานของฉัน' };
   let current = null;
 
   function parse() {
@@ -60,6 +60,8 @@
     if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { paintThemeBtn(); PAGES.forEach((p) => S.pages[p].onTheme && S.pages[p].onTheme()); });
     try {
       if (typeof initSqlJs !== 'function' || typeof CodeMirror !== 'function') throw new Error('โหลดไลบรารีจาก cdnjs ไม่สำเร็จ — ตรวจสอบการเชื่อมต่ออินเทอร์เน็ต');
+      await S.cloud.init();
+      S.account.renderButton();
       await S.ws.init();
       PAGES.forEach((p) => S.pages[p].init(document.getElementById('page-' + p)));
       window.addEventListener('hashchange', route);

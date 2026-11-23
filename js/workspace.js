@@ -42,7 +42,7 @@
     activeFile() { return this.file(this.data.activeFileId) || this.data.files[0]; },
     initFile() { return this.data.files.find(isInit) || null; },
     setActive(id) { this.data.activeFileId = id; this.save(); this.emit('active'); },
-    setContent(id, content) { const f = this.file(id); if (f) { f.content = content; this.saveSoon(); } },
+    setContent(id, content) { const f = this.file(id); if (f) { f.content = content; this.saveSoon(); this.cloudSoon(); } },
     uniqueName(base) {
       const names = new Set(this.data.files.map((f) => f.name.toLowerCase()));
       if (!names.has(base.toLowerCase())) return base;
@@ -54,6 +54,7 @@
       this.data.files.push(f);
       this.data.activeFileId = f.id;
       this.save();
+      this.cloudSoon();
       this.emit('files');
       return f;
     },
@@ -63,20 +64,36 @@
       name = name.trim();
       if (!/\.\w+$/.test(name)) name += '.sql';
       if (this.data.files.some((x) => x.id !== id && x.name.toLowerCase() === name.toLowerCase())) { U.toast('มีไฟล์ชื่อนี้แล้ว', 'err'); return; }
-      f.name = name; this.save(); this.emit('files');
+      f.name = name; this.save(); this.cloudSoon(); this.emit('files');
     },
     removeFile(id) {
       if (this.data.files.length <= 1) { U.toast('ต้องมีอย่างน้อย 1 ไฟล์', 'err'); return; }
       const i = this.data.files.findIndex((f) => f.id === id);
       this.data.files.splice(i, 1);
       if (this.data.activeFileId === id) this.data.activeFileId = this.data.files[Math.max(0, i - 1)].id;
-      this.save(); this.emit('files');
+      this.save(); this.cloudSoon(); this.emit('files');
     },
-    setDialect(d) { this.data.dialect = d; this.save(); this.emit('dialect'); },
+    setDialect(d) { this.data.dialect = d; this.save(); this.cloudSoon(); this.emit('dialect'); },
 
     /* ---------- persistence ---------- */
     save() { store.saveWorkspace(this.data); },
     saveSoon: U.debounce(function () { ws.save(); }, 400),
+
+    /* ---------- cloud (Phase 3) ---------- */
+    cloudFiles() { return this.data.files.map((f) => ({ name: f.name, content: f.content })); },
+    /** Autosave to the cloud when this workspace is a cloud project and the user is logged in. */
+    cloudSoon: U.debounce(function () {
+      if (!S.cloud || !S.cloud.loggedIn || !ws.data.cloudId) return;
+      ws.saveToCloud().catch(() => {});
+    }, 2500),
+    async saveToCloud(name) {
+      if (name) this.data.name = name;
+      const row = await S.cloud.saveProject({ id: this.data.cloudId || null, name: this.data.name || 'โปรเจกต์', dialect: this.data.dialect, files: this.cloudFiles() });
+      if (row.id !== this.data.cloudId) { this.data.cloudId = row.id; }
+      this.save();
+      this.emit('projects');
+      return row;
+    },
     persistDb() {
       try {
         const bytes = engine.exportDb(this.db);
@@ -213,7 +230,7 @@
     openProject(p) {
       const files = p.files.map((f) => ({ id: U.uid(), name: f.name, content: f.content }));
       const q = files.find((f) => !isInit(f)) || files[0];
-      return this.load({ name: p.name, dialect: p.dialect || 'tsql', files, activeFileId: q.id, projectId: p.id || null });
+      return this.load({ name: p.name, dialect: p.dialect || 'tsql', files, activeFileId: q.id, projectId: p.id || null, cloudId: p.cloudId || null });
     },
   };
 

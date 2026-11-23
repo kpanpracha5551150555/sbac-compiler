@@ -55,8 +55,9 @@
     els.stDialect = h('span', { class: 'st hide-sm' });
     els.stDb = h('span', { class: 'st hide-sm' });
     els.stTheme = h('button', { onclick: () => S.app.toggleTheme() });
+    els.stCloud = h('span', { class: 'st cloud-st' });
     root.append(els.ide, h('div', { class: 'statusbar' },
-      els.stState, els.stPos, els.stDialect, els.stDb, h('span', { class: 'grow' }),
+      els.stState, els.stPos, els.stDialect, els.stDb, h('span', { class: 'grow' }), els.stCloud,
       els.stTheme, h('a', { href: '#/tutorial', class: 'st' }, icon('book'), 'บทเรียน')));
 
     // editor
@@ -77,6 +78,8 @@
     refreshMeta();
     renderOut();
     ws.on(onWs);
+    if (S.cloud) S.cloud.on((type) => { if (type === 'status' || type === 'auth') paintCloud(); if (type === 'auth' && side === 'files') renderSide(); });
+    paintCloud();
   }
 
   function buildTop() {
@@ -293,8 +296,9 @@
     }, icon('db', 'db-ico'), h('span', { class: 'grow' }, f.name), S.isInitFile(f) ? h('span', { class: 'meta' }, 'init') : null)));
     body.append(h('div', { style: { display: 'flex', gap: '6px', margin: '8px 4px' } },
       h('button', { class: 'btn btn-xs', onclick: uploadFile }, icon('upload'), 'อัปโหลด .sql'),
-      h('button', { class: 'btn btn-xs', onclick: () => saveProject(true) }, icon('save'), 'บันทึกเป็น…')));
-    body.append(h('div', { class: 'side-section' }, 'โปรเจกต์ที่บันทึกไว้'));
+      h('button', { class: 'btn btn-xs', onclick: () => saveProject(true) }, icon('save'), S.cloud && S.cloud.loggedIn ? 'บันทึกเป็น… (คลาวด์)' : 'บันทึกเป็น…')));
+    body.append(h('a', { class: 'btn btn-xs', href: '#/projects', style: { margin: '4px' } }, icon('files'), S.cloud && S.cloud.loggedIn ? 'งานของฉันบนคลาวด์' : 'งานของฉัน'));
+    body.append(h('div', { class: 'side-section' }, 'โปรเจกต์ในเครื่องนี้'));
     const projects = store.projects();
     if (!projects.length) body.append(h('div', { class: 'side-empty' }, 'ยังไม่มี — กด Save (Ctrl + S) เพื่อบันทึกงานนี้เป็นโปรเจกต์'));
     projects.forEach((p) => body.append(h('div', { class: 'side-item' + (p.id === ws.data.projectId ? ' active' : ''), role: 'button', tabindex: '0', onclick: () => openProject(p) },
@@ -478,6 +482,7 @@
     if (f) newFile(f.name, f.text);
   }
   async function saveProject(asNew) {
+    if (S.cloud && S.cloud.loggedIn) return saveCloud(asNew);
     let name = ws.data.name;
     if (asNew === true || !ws.data.projectId) {
       name = await promptBox('บันทึกโปรเจกต์', 'ชื่อโปรเจกต์', ws.data.name || 'โปรเจกต์ของฉัน');
@@ -487,6 +492,32 @@
     ws.saveProject(name);
     toast('บันทึกแล้ว: ' + name, 'ok');
     if (side === 'files') renderSide();
+  }
+  async function saveCloud(asNew) {
+    let name = ws.data.name;
+    if (asNew === true || !ws.data.cloudId) {
+      name = await promptBox('บันทึกบนคลาวด์', 'ชื่อโปรเจกต์', ws.data.name || 'โปรเจกต์ของฉัน');
+      if (!name) return;
+      if (asNew === true) ws.data.cloudId = null;
+    }
+    try {
+      await ws.saveToCloud(name);
+      toast('บันทึกบนคลาวด์แล้ว: ' + name + ' — แก้ไขต่อจากนี้จะบันทึกอัตโนมัติ', 'ok');
+    } catch (e) { toast('บันทึกไม่สำเร็จ: ' + e.message, 'err'); }
+    if (side === 'files') renderSide();
+  }
+  function paintCloud() {
+    const c = S.cloud;
+    const el = els.stCloud;
+    el.innerHTML = '';
+    el.className = 'st cloud-st';
+    if (!c || !c.enabled) return;
+    if (!c.loggedIn) { el.append(h('button', { onclick: () => S.account.authDialog('login'), title: 'เข้าสู่ระบบเพื่อเก็บงานบนคลาวด์' }, '☁ ยังไม่ได้เข้าสู่ระบบ')); return; }
+    if (!ws.data.cloudId) { el.append(h('button', { onclick: () => saveCloud(), title: 'บันทึกงานนี้ขึ้นคลาวด์ (Ctrl + S)' }, '☁ ยังไม่อยู่บนคลาวด์ — กด Save')); return; }
+    const t = c.lastSaved ? c.lastSaved.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : '';
+    if (c.status === 'saving') { el.classList.add('saving'); el.append('☁ กำลังบันทึก…'); }
+    else if (c.status === 'error') { el.classList.add('error'); el.append(h('button', { onclick: () => saveCloud(), title: c.lastError || '' }, '☁ บันทึกไม่สำเร็จ — ลองอีกครั้ง')); }
+    else { el.classList.add('saved'); el.append('☁ บันทึกบนคลาวด์แล้ว' + (t ? ' ' + t : '')); }
   }
   async function openProject(p) {
     if (p.id === ws.data.projectId) return;
@@ -573,7 +604,8 @@
     else if (type === 'dialect') { cm.setOption('mode', modeFor()); docs.forEach((d) => d.cm || null); refreshMeta(); }
     else if (type === 'db') { refreshMeta(); if (outTab === 'db') renderOut(); if (side === 'db') renderSide(); }
     else if (type === 'history' && side === 'history') renderSide();
-    else if (type === 'projects' && side === 'files') renderSide();
+    else if (type === 'projects') { paintCloud(); if (side === 'files') renderSide(); }
+    if (type === 'files') paintCloud();
   }
 
   S.pages = S.pages || {};

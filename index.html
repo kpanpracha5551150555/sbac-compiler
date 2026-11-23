@@ -11,7 +11,7 @@
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.css">
-  <link rel="stylesheet" href="css/app.css?v=6">
+  <link rel="stylesheet" href="css/app.css?v=8">
   <script>
     (function () {
       try {
@@ -36,6 +36,7 @@
       <a href="#/tutorial" data-page="tutorial">บทเรียน</a>
       <a href="#/tables" data-page="tables">ตาราง</a>
       <a href="#/exercises" data-page="exercises">แบบฝึกหัด</a>
+      <a href="#/projects" data-page="projects">งานของฉัน</a>
     </nav>
 
     <div class="top-center" id="topCenter"></div>
@@ -43,6 +44,7 @@
     <div class="top-right">
       <button class="icon-btn" id="themeBtn" title="สลับธีมสว่าง/มืด" aria-label="สลับธีม"></button>
       <div id="topRight" class="top-right-slot"></div>
+      <div id="accountSlot" class="top-right-slot"></div>
     </div>
   </header>
 
@@ -52,6 +54,7 @@
     <section class="page" id="page-tutorial" hidden></section>
     <section class="page" id="page-tables" hidden></section>
     <section class="page" id="page-exercises" hidden></section>
+    <section class="page page-scroll" id="page-projects" hidden></section>
   </main>
 
   <div id="boot" class="boot">
@@ -73,23 +76,28 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/comment/comment.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/search/searchcursor.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.12.0/sql-wasm.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.47.10/dist/umd/supabase.min.js"></script>
 
   <!-- App -->
-  <script src="js/util.js?v=6"></script>
-  <script src="js/store.js?v=6"></script>
-  <script src="js/dialects.js?v=6"></script>
-  <script src="js/engine.js?v=6"></script>
-  <script src="js/remote.js?v=6"></script>
-  <script src="js/data/datasets.js?v=6"></script>
-  <script src="js/data/templates.js?v=6"></script>
-  <script src="js/data/lessons.js?v=6"></script>
-  <script src="js/data/exercises.js?v=6"></script>
-  <script src="js/workspace.js?v=6"></script>
-  <script src="js/pages/editor.js?v=6"></script>
-  <script src="js/pages/templates.js?v=6"></script>
-  <script src="js/pages/tutorial.js?v=6"></script>
-  <script src="js/pages/tables.js?v=6"></script>
-  <script src="js/pages/exercises.js?v=6"></script>
-  <script src="js/app.js?v=6"></script>
+  <script src="js/config.js?v=8"></script>
+  <script src="js/util.js?v=8"></script>
+  <script src="js/store.js?v=8"></script>
+  <script src="js/dialects.js?v=8"></script>
+  <script src="js/engine.js?v=8"></script>
+  <script src="js/remote.js?v=8"></script>
+  <script src="js/cloud.js?v=8"></script>
+  <script src="js/account.js?v=8"></script>
+  <script src="js/data/datasets.js?v=8"></script>
+  <script src="js/data/templates.js?v=8"></script>
+  <script src="js/data/lessons.js?v=8"></script>
+  <script src="js/data/exercises.js?v=8"></script>
+  <script src="js/workspace.js?v=8"></script>
+  <script src="js/pages/editor.js?v=8"></script>
+  <script src="js/pages/templates.js?v=8"></script>
+  <script src="js/pages/tutorial.js?v=8"></script>
+  <script src="js/pages/tables.js?v=8"></script>
+  <script src="js/pages/exercises.js?v=8"></script>
+  <script src="js/pages/projects.js?v=8"></script>
+  <script src="js/app.js?v=8"></script>
 </body>
 </html>
