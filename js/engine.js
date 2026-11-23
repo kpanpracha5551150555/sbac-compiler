@@ -302,6 +302,26 @@
       return r;
     } finally { db.close(); }
   }
+  /** Like runIsolated, but the database is built from arbitrary setup SQL (teacher-written problems). */
+  const setupCache = new Map();
+  function runWithSetup(setupSql, code, dialect, checkSql) {
+    let bytes = setupCache.get(setupSql);
+    if (!bytes) {
+      const db0 = createDb();
+      const r0 = execute(db0, setupSql || '', 'tsql');
+      bytes = db0.export();
+      db0.close();
+      if (!r0.ok) { const err = r0.items.find((i) => i.kind === 'error'); return { ok: false, ms: 0, statements: 0, items: [{ kind: 'error', message: 'SQL เตรียมข้อมูลของโจทย์ผิดพลาด: ' + (err ? err.message : '') }] }; }
+      if (setupCache.size > 30) setupCache.clear();
+      setupCache.set(setupSql, bytes);
+    }
+    const db = createDb(bytes);
+    try {
+      const r = execute(db, code, dialect || 'tsql');
+      if (checkSql && r.ok) r.check = execute(db, checkSql, 'tsql');
+      return r;
+    } finally { db.close(); }
+  }
   const lastTable = (r) => (r ? [...r.items].reverse().find((i) => i.kind === 'table') || null : null);
 
   /* ---------- compare result sets (exercise checker) ---------- */
@@ -336,7 +356,7 @@
   }
 
   S.engine = {
-    init, createDb, exportDb, execute, schema, textColumns, hintTables, tableData, runIsolated, datasetDb,
+    init, createDb, exportDb, execute, schema, textColumns, hintTables, tableData, runIsolated, datasetDb, runWithSetup,
     lastTable, compare, qi, hintFor, get ready() { return !!SQL; },
   };
 })(window.SBAC);

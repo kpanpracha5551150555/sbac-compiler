@@ -2,8 +2,8 @@
 (function (S) {
   'use strict';
   const U = S.util;
-  const PAGES = ['editor', 'templates', 'tutorial', 'tables', 'exercises', 'projects'];
-  const TITLES = { editor: 'Compiler', templates: 'แม่แบบ', tutorial: 'บทเรียน', tables: 'ตาราง', exercises: 'แบบฝึกหัด', projects: 'งานของฉัน' };
+  const PAGES = ['editor', 'templates', 'tutorial', 'tables', 'exercises', 'classroom', 'projects'];
+  const TITLES = { editor: 'Compiler', templates: 'แม่แบบ', tutorial: 'บทเรียน', tables: 'ตาราง', exercises: 'แบบฝึกหัด', projects: 'งานของฉัน', classroom: 'ห้องเรียน' };
   let current = null;
 
   function parse() {
