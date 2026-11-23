@@ -37,6 +37,12 @@ drop trigger if exists progress_touch on public.progress;
 create trigger progress_touch before update on public.progress
   for each row execute function public.sbac_touch();
 
+-- ---------- table privileges for logged-in users (rows are still limited by RLS below) ----------
+-- newer Supabase projects do not grant new tables to the API roles automatically
+revoke all on public.projects, public.progress from anon;
+grant select, insert, update, delete on public.projects to authenticated;
+grant select, insert, update on public.progress to authenticated;
+
 -- ---------- Row Level Security: everyone sees only their own rows ----------
 alter table public.projects enable row level security;
 alter table public.progress enable row level security;

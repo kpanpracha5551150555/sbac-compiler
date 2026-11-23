@@ -4,6 +4,6 @@
  * Leave empty to run without accounts (everything stays in the browser). */
 window.SBAC = window.SBAC || {};
 window.SBAC.config = {
-  supabaseUrl: '',
-  supabaseAnonKey: '',
+  supabaseUrl: 'https://vlumqwflljtauxnipqjj.supabase.co',
+  supabaseAnonKey: 'sb_publishable_au2rPS2tO_7Hmlygp9CUwQ_k-ul-6Cl',
 };
